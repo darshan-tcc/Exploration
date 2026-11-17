@@ -1,24 +1,42 @@
-import { useDispatch, useSelector } from "react-redux";
-import { deleteTask, toggleTask } from "./taskSlice";
+import { useEffect } from "react";
+import { useSelector, useDispatch } from "react-redux";
 
+import { fetchTasks,deleteTask,toggleTask } from "./taskSlice";
 
 function TaskList() {
-  const tasks = useSelector((state) => state.tasks.items);
-  const totalTask = useSelector((state) => state.tasks.totalTask);
-  const dispatch=useDispatch();
-  
+  const dispatch = useDispatch();
+
+  const {
+    items: tasks,
+    status,
+    error
+  } = useSelector((state) => state.tasks);
+
+  useEffect(() => {
+    if (status === "idle") {
+      dispatch(fetchTasks());
+    }
+  }, [dispatch, status]);
+
+  if (status === "loading") {
+    return <p>Loading tasks...</p>;
+  }
+
+  if (status === "failed") {
+    return <p>Error: {error}</p>;
+  }
 
   return (
     <div>
-      <h2>Task List</h2>
-    <p>Total Task : {totalTask}</p>
+      <h2>My Tasks</h2>
+
       {tasks.length === 0 ? (
-        <p>No Task Available</p>
+        <p>No tasks available</p>
       ) : (
         <ul>
           {tasks.map((task) => (
             <li key={task.id}>
-            <h3
+              <h3
                 style={{
                   textDecoration: task.isCompleted
                     ? "line-through"
@@ -27,15 +45,13 @@ function TaskList() {
               >
                 {task.title}
               </h3>
+
               <p>{task.description}</p>
 
               <p>
-                Created:{" "}
-                {new Date(task.createdAt).toLocaleString()}
-              </p>
-               <p>
-                Status:{" "}
-                {task.isCompleted ? "Completed" : "Pending"}
+                Status: {task.isCompleted
+                  ? "Completed"
+                  : "Pending"}
               </p>
 
               <button
@@ -50,7 +66,6 @@ function TaskList() {
                 Delete
               </button>
             </li>
-            
           ))}
         </ul>
       )}
