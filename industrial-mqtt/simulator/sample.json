@@ -1,0 +1,50 @@
+{ 
+"metadata":{ 
+  "machineId": 1012, 
+  "machineName": "CB610_1", 
+  "plantId": 12, 
+  "plantName": "TCL-2", 
+  "lineId": 145, 
+  "lineName": "MIW Block Line", 
+  },
+  "production": { 
+    "productionCount_Day": 850, 
+    "targetQuantity": 1200, 
+    "targetQuantity_Day": 1500, 
+    "OEEScrapCount": 12, 
+    "OEEProdCount": 1250 
+  }, 
+  "operator": { 
+    "OperatorName": "Operator A" 
+  }, 
+  "status": { 
+    "machineStatus": 1, 
+  }, 
+  "kpi": { 
+    "performance": 87.5, 
+    "availability": 92.4, 
+    "quality": 98.6, 
+    "oee": 79.7 
+  }, 
+  "product": { 
+    "plcModelName": "Model-A", 
+    "model": "Model-A", 
+    "SerialNumber": "SN123456" 
+  }, 
+  "shift": { 
+    "shift": 1, 
+    "shiftStartTime": "2026-11-05T06:00:00+05:30", 
+    "shiftEndTime": "2026-11-05T14:30:00+05:30", 
+    "ShiftDate": "2026-11-05" 
+  }, 
+  "cycleTime": { 
+    "designCycleTime": 45.0, 
+    "averageCycleTime": 48.5 
+  }, 
+  "time": { 
+    "runtime": 325.5, 
+    "downtime": 42.0, 
+    "idleTime": 18.5 
+  } 
+}  
+ 

@@ -1,0 +1,20 @@
+[project]
+name = "industrial-mqtt"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Darshan-T-P", email = "darshantp13@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "paho-mqtt<2.0.0",
+    "pysparkplug>=0.3.0",
+]
+
+[project.scripts]
+industrial-mqtt = "industrial_mqtt:main"
+
+[build-system]
+requires = ["uv_build>=0.12.7,<0.13.0"]
+build-backend = "uv_build"
