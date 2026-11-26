@@ -1,0 +1,5 @@
+# Ignition MQTT Client Requirements
+# Install with: pip install -r requirements.txt
+
+paho-mqtt<2.0.0
+pysparkplug>=0.3.0

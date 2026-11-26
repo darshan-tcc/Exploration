@@ -1,0 +1,290 @@
+# Factory Data Integration & Industrial MQTT — Comprehensive Handbook
+
+> **Scope:** A complete, deeply detailed, beginner-friendly guide covering:
+> 1. Official Download Links & System Architecture.
+> 2. Installing & Starting Local Environment (Mosquitto, PostgreSQL, FastAPI Backend).
+> 3. Downloading & Installing Cirrus Link MQTT Modules (Plugins) in Ignition SCADA.
+> 4. Launching Ignition Designer & Creating Live Gauges/Dashboards.
+> 5. How the Code Works & How Parameters Map to the Screen.
+> 6. Commands & URLs Quick Reference.
+
+---
+
+## 1. Official Download Links & Software Requirements
+
+All tools used in this project are free for development and testing (Ignition includes an unlimited renewable 2-hour trial mode designed specifically for building and learning).
+
+| Software / Component | Official Download Link | Description / Notes |
+| :--- | :--- | :--- |
+| **Ignition SCADA Gateway (8.1 / 8.3)** | [Inductive Automation Downloads](https://inductiveautomation.com/downloads/) | Main SCADA Gateway platform (Linux 64-bit .zip or installer). |
+| **Ignition Designer Launcher** | Downloaded from your running Gateway: `http://localhost:8088` (Home ➔ **Get Designer**) or [Inductive Automation Downloads](https://inductiveautomation.com/downloads/) | Standalone desktop launcher for designing screens, HMIs, and tags. |
+| **Cirrus Link MQTT Engine Module** | [Cirrus Link MQTT Modules for Ignition](https://inductiveautomation.com/downloads/third-party-modules) or [Cirrus Link Official Site](https://sales.cirrus-link.com/download-modules/) | `.modl` file enabling Sparkplug B and MQTT tag auto-discovery. |
+| **Cirrus Link MQTT Distributor** | [Cirrus Link Distributor Download](https://sales.cirrus-link.com/download-modules/) | Optional internal MQTT broker module for Ignition. |
+| **Eclipse Mosquitto Broker** | [Mosquitto Downloads](https://mosquitto.org/download/) | Lightweight industrial MQTT broker (`sudo apt install mosquitto` or `sudo pacman -S mosquitto`). |
+| **PostgreSQL Database** | [PostgreSQL Downloads](https://www.postgresql.org/download/) | Relational & JSONB time-series database. |
+| **Astral UV (Python Manager)** | [Astral UV Installation](https://docs.astral.sh/uv/) | Fast Python package and virtual environment manager (`curl -LsSf https://astral.sh/uv/install.sh \| sh`). |
+
+---
+
+## 2. System Architecture & Port Map
+
+Understand how each component communicates locally:
+
+```mermaid
+flowchart TD
+    subgraph Simulators["Edge Telemetry Simulators"]
+        P1["Python Sparkplug B Simulator<br/>(simulator/sparkplug_factory.py)"]
+        P2["Python JSON MQTT Publisher<br/>(simulator/mqtt_publisher.py)"]
+        P3["Factory HTTP API Simulator<br/>(simulator/factory_api_server.py)"]
+    end
+
+    subgraph Middleware["Broker & Database"]
+        Mosquitto["Mosquitto MQTT Broker<br/>Port: 1883"]
+        PG[("PostgreSQL 18 Database<br/>Port: 5434 (Sockets in /tmp)")]
+    end
+
+    subgraph IgnitionSCADA["Ignition SCADA Platform"]
+        Gateway["Ignition Gateway Web Interface<br/>http://localhost:8088"]
+        Engine["Cirrus Link MQTT Engine Module<br/>(Subscribes to Mosquitto :1883)"]
+        Designer["Ignition Designer Launcher<br/>(Visual Tag Browser, HMI, Gauges)"]
+        Gateway --- Engine
+        Gateway --- Designer
+    end
+
+    subgraph BackendApp["Custom Python Backend"]
+        FastAPIApp["FastAPI Backend Server<br/>Port: 8000<br/>(Swagger: http://localhost:8000/docs)"]
+    end
+
+    P1 -->|Sparkplug B Protobuf :1883| Mosquitto
+    P2 -->|Raw JSON :1883| Mosquitto
+    P3 -->|HTTP REST :8005| FastAPIApp
+    Mosquitto -->|Sparkplug Auto-Discovery| Engine
+    Mosquitto -->|JSON Telemetry| FastAPIApp
+    FastAPIApp -->|Persist JSONB Telemetry| PG
+    Engine -->|Live Tags| Designer
+```
+
+---
+
+## 3. Step-by-Step Installation & Setup
+
+### 3.1 Installing Mosquitto Broker
+* **Ubuntu/Debian:** `sudo apt update && sudo apt install mosquitto mosquitto-clients`
+* **Arch Linux:** `sudo pacman -S mosquitto`
+* **Run in background:**
+  ```bash
+  /usr/bin/mosquitto -d
+  ```
+* **Verify running:**
+  ```bash
+  ss -tlpn | grep 1883
+  ```
+
+### 3.2 Setting up PostgreSQL (Local Port 5434)
+We run PostgreSQL with its data directory inside the workspace and unix sockets in `/tmp`:
+```bash
+# Start PostgreSQL server
+/usr/bin/postgres -D /home/darshan/Projects/Work/TCC/Exploration/industrial-mqtt/db_data &
+```
+
+### 3.3 Installing & Starting Ignition Gateway
+1. Download the Linux 64-bit installer or ZIP from [Inductive Automation](https://inductiveautomation.com/downloads/).
+2. Extract to your desired folder (e.g., `/home/darshan/ignition textmode=true/`).
+3. Start the Gateway in console mode:
+   ```bash
+   "/home/darshan/ignition textmode=true/ignition.sh" console &
+   ```
+4. Open your web browser and navigate to:
+   **[http://localhost:8088](http://localhost:8088)**
+5. Follow the commissioning wizard:
+   - Select **Maker Edition** (for personal learning) or **Standard Trial Edition**.
+   - Create an admin user account (e.g., username `admin`, and your chosen password).
+   - Complete setup and click **Start Gateway**.
+
+---
+
+## 4. How to Download & Install MQTT Modules (Plugins) in Ignition
+
+Ignition uses a modular architecture. Out of the box, Ignition does not speak Sparkplug B until you install the **Cirrus Link MQTT Engine** module.
+
+### 4.1 Step 1: Download the Module Files
+1. Visit the [Cirrus Link Module Downloads page](https://sales.cirrus-link.com/download-modules/).
+2. Download the `.modl` file matching your Ignition version (e.g. `MQTT-Engine-signed.modl`).
+3. Keep the `.modl` file in your Downloads or project folder.
+
+### 4.2 Step 2: Upload into Ignition Gateway
+1. Open your browser to **[http://localhost:8088](http://localhost:8088)**.
+2. In the left navigation menu, expand **Config** and go to **System ➔ Modules**.
+3. Scroll to the bottom of the page and find the section:
+   **"Install or Upgrade a Module"**.
+4. Click **Choose File** (or Browse) and select your downloaded `MQTT-Engine-signed.modl`.
+5. Click **Install**.
+6. The browser will display the Cirrus Link Certificate and EULA agreement. Check **"I accept the terms..."** and click **Confirm**.
+7. Once installed, verify that **MQTT Engine** appears in the module list with a green status: **Running**.
+
+### 4.3 Step 3: Connect MQTT Engine to Mosquitto
+Now that the module is installed, tell it where your MQTT broker is:
+1. In the left navigation menu under **Config**, scroll down to find the **MQTT ENGINE** section.
+2. Click **Settings ➔ Servers**.
+3. Click the link: **Create new MQTT Server**.
+4. Configure the server connection settings:
+   - **Name**: `LocalMosquitto`
+   - **URL**: `tcp://localhost:1883` *(pointing to our local Mosquitto)*
+   - **SSL**: Leave unchecked (local unencrypted testing)
+   - **Username / Password**: Leave blank (unless you configured Mosquitto passwords)
+5. Click **Save Changes**.
+6. The status in the table should now show **Connected** with a green checkmark.
+
+---
+
+## 5. How to Launch Ignition Designer & Work with Tags
+
+### 5.1 Launching Designer
+1. Open your running Ignition Gateway at **`http://localhost:8088`** ➔ go to the **Home** tab ➔ click **Get Designer** (or **Download Designer Launcher**). Alternatively, find it on [Inductive Automation Downloads](https://inductiveautomation.com/downloads/).
+2. Extract the launcher.
+3. On Linux/Wayland (Hyprland), launch it via our patched script to prevent screen-share modals:
+   ```bash
+   /home/darshan/designerlauncher/designerlauncher/designerlauncher.sh
+   ```
+4. The Designer Launcher window will appear. It automatically discovers your local Gateway at `http://localhost:8088`. Click **Launch**.
+5. Enter your Gateway admin credentials.
+6. Click **New Project**, name it `Factory_Overview`, and click **Create Project**.
+
+### 5.2 Locating the Auto-Discovered MQTT Tags
+1. Once the Designer workspace opens, look at the left pane called **Tag Browser**.
+2. Notice the dropdown at the top of Tag Browser currently says `[default]`. Click the dropdown and select **`[MQTT Engine]`**.
+3. Expand the folder tree:
+   ```text
+   [MQTT Engine]
+     └── Edge Nodes
+           └── Plant1
+                 └── Line1
+                       ├── Machine01_Stamping
+                       │     ├── Die_Temperature_C
+                       │     ├── Hydraulic_Pressure_Bar
+                       │     ├── Lubrication_Level_Pct
+                       │     ├── Status
+                       │     ├── Stroke_Count
+                       │     └── Tonnage_Actual_Tons
+                       ├── Machine02_CNC
+                       │     ├── Axis_X_Pos_mm
+                       │     ├── Coolant_Flow_L_min
+                       │     ├── Feed_Rate_mm_min
+                       │     ├── Spindle_RPM
+                       │     ├── Status
+                       │     └── Tool_Wear_Pct
+                       └── Machine03_Packaging
+                             ├── Carton_Count
+                             ├── Conveyor_Speed_m_s
+                             ├── Glue_Level_Pct
+                             ├── Jam_Alarm
+                             ├── Sealing_Temp_C
+                             └── Status
+   ```
+4. Start the Sparkplug simulator in your terminal:
+   ```bash
+   uv run python simulator/sparkplug_factory.py
+   ```
+5. Look back at Designer: The numbers will automatically update with green quality indicators every 2 seconds.
+
+---
+
+## 6. How to Build Visual Gauges & Dashboards in Designer
+
+### 6.1 Creating a Perspective View (HMI / Mobile View)
+1. In the **Project Browser** (top left), expand **Perspective ➔ Views**.
+2. Right-click on **Views** ➔ select **New View...**.
+3. Name the view `Machine_Overview`.
+4. Layout type: Select **Flex** or **Coordinate** ➔ Click **Create View**.
+
+### 6.2 Binding a Live Gauge to Machine Telemetry
+1. On the right side of the screen, open the **Component Palette**.
+2. Find the **Gauge** component and drag it onto your view canvas.
+3. With the Gauge selected, look at the **PROPS** panel on the bottom-right.
+4. Locate the `value` property (defaults to something like `50`).
+5. Hover over `value` and click the small **Link / Binding icon** that appears next to it.
+6. In the binding popup:
+   - Select **Tag** on the left.
+   - Click the folder browse icon and navigate to:
+     `[MQTT Engine]Edge Nodes/Plant1/Line1/Machine01_Stamping/Hydraulic_Pressure_Bar`
+   - Click **OK**.
+7. In the Gauge PROPS:
+   - Change `minValue` to `0`.
+   - Change `maxValue` to `250`.
+   - Change `units` to `Bar`.
+8. The gauge needle will immediately start animating in real-time, matching the pressure simulated in your Python script.
+
+### 6.3 Creating a Running/Stopped Status Indicator
+1. Drag a **Label** component onto the canvas above the gauge.
+2. Select the Label ➔ go to PROPS ➔ `text`.
+3. Click the **Binding icon** next to `text`:
+   - Select **Tag** ➔ choose `.../Machine01_Stamping/Status`.
+   - Under **Transform**, click **Add Transform** ➔ select **Map**.
+   - Set: `0` ➔ `"STOPPED / FAULT"`, `1` ➔ `"RUNNING"`.
+4. Click **OK**. The label now dynamically shows whether the machine is operating or stopped.
+
+---
+
+## 7. How the Code Works & How Parameters Map to the Screen
+
+Here is the exact lifecycle of how a value moves from a line of Python code to your physical screen:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Py as Python Simulator (sparkplug_factory.py)
+    participant Mosq as Mosquitto Broker (:1883)
+    participant Eng as Ignition MQTT Engine
+    participant Des as Ignition Perspective Gauge
+    participant BE as FastAPI Backend & PostgreSQL
+
+    Py->>Py: state["hydraulic_pressure"] = round(random.uniform(175.0, 195.0), 1) -> 184.2
+    Py->>Mosq: Publish DDATA (Binary Protobuf: Hydraulic_Pressure_Bar = 184.2)
+    Mosq->>Eng: Forwards MQTT packet to Ignition
+    Eng->>Eng: Unpacks Protobuf & updates tag [MQTT Engine].../Hydraulic_Pressure_Bar
+    Eng->>Des: Fires tag change event over internal WebSocket
+    Des->>Des: Gauge needle animates to 184.2 Bar on screen!
+
+    Note over Py,BE: Simultaneously in our Backend Pipeline:
+    Py->>Mosq: JSON payload {machine_id: "M01", hydraulic_pressure: 184.2}
+    Mosq->>BE: Async MQTT subscriber receives JSON
+    BE->>BE: Normalizes, validates & stores in PostgreSQL (JSONB parameters)
+    BE->>BE: Broadcasts to mobile app via WebSocket /api/v1/ws/live
+```
+
+### Direct Code Mapping
+
+In [simulator/sparkplug_factory.py](file:///home/darshan/Projects/Work/TCC/Exploration/industrial-mqtt/simulator/sparkplug_factory.py):
+```python
+# 1. Parameter definition in Python
+metrics = [
+    m("Hydraulic_Pressure_Bar", DataType.FLOAT, state["hydraulic_pressure"]),
+    m("Die_Temperature_C",      DataType.FLOAT, state["die_temp"]),
+    m("Stroke_Count",           DataType.INT64, state["stroke_count"]),
+]
+```
+1. **Parameter Name (`"Hydraulic_Pressure_Bar"`)**: Becomes the exact tag name displayed in Ignition's Tag Browser.
+2. **Data Type (`DataType.FLOAT`)**: Informs Ignition and PostgreSQL that this tag is a floating-point number, enabling analog gauge scaling.
+3. **Value Calculation (`random.uniform(175.0, 195.0)`)**: Simulates the physical behavior of hydraulic pumps cycling under load.
+4. **Transport**: `edge_node.update_device(...)` serializes the data into compact Sparkplug B binary protobuf bytes and delivers it across Mosquitto.
+
+---
+
+## 8. Summary of Commands Reference Sheet
+
+Keep this reference table handy when starting or operating the system:
+
+| Task | Terminal Command / Action |
+| :--- | :--- |
+| **Start Mosquitto Broker** | `/usr/bin/mosquitto -d` |
+| **Start PostgreSQL Database** | `/usr/bin/postgres -D /home/darshan/Projects/Work/TCC/Exploration/industrial-mqtt/db_data &` |
+| **Start Ignition SCADA** | `"/home/darshan/ignition textmode=true/ignition.sh" console &` |
+| **Launch Ignition Designer** | `/home/darshan/designerlauncher/designerlauncher/designerlauncher.sh` |
+| **Start Backend API Server** | `uv run python -m factory_backend.api.main` |
+| **Start Factory API Simulator** | `uv run python simulator/factory_api_server.py` |
+| **Run Sparkplug B Simulation** | `uv run python simulator/sparkplug_factory.py` |
+| **Run JSON MQTT Simulation** | `uv run python simulator/mqtt_publisher.py` |
+| **Run Automated Tests** | `uv run pytest tests/test_integration.py -v` |
+| **Open Backend Swagger UI** | Open browser to **`http://localhost:8000/docs`** |
+| **Open Ignition Gateway Web** | Open browser to **`http://localhost:8088`** |
+| **Open Factory API Endpoint** | Open browser to **`http://localhost:8005/api/v1/factory/machines/telemetry`** |
